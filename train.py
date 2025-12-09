@@ -17,9 +17,9 @@ from model import CTRNN
 # ============================================================================
 
 # Model parameters
-N_INPUT = 4              # [cursor_x, cursor_y, target_x, target_y]
-N_RECURRENT = 128        # Hidden units
-N_OUTPUT = 2             # [next_cursor_x, next_cursor_y]
+N_INPUT = 4  # [cursor_x, cursor_y, target_x, target_y]
+N_RECURRENT = 128  # Hidden units
+N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
 # Training parameters
 LEARNING_RATE = 1e-3
@@ -36,10 +36,10 @@ PLOT_DIR = "plots/"
 # Random seed for reproducibility
 RANDOM_SEED = 42
 
-
 # ============================================================================
 # SECTION 2: DATA PREPARATION FUNCTIONS
 # ============================================================================
+
 
 def load_and_prepare_data(dataset, normalize=True, min_length=10):
     """
@@ -65,16 +65,22 @@ def load_and_prepare_data(dataset, normalize=True, min_length=10):
 
     # Filter out trials that are too short
     trial_lengths = [t.cursor_positions.shape[1] for t in all_trials]
-    trials = [t for t in all_trials if t.cursor_positions.shape[1] >= min_length]
+    trials = [
+        t for t in all_trials if t.cursor_positions.shape[1] >= min_length
+    ]
     n_filtered = n_trials - len(trials)
 
-    print(f"Loaded {n_trials} trials, filtered out {n_filtered} trials with < {min_length} samples")
-    print(f"Trial length stats: min={min(trial_lengths)}, max={max(trial_lengths)}, "
-          f"mean={np.mean(trial_lengths):.1f}")
+    print(
+        f"Loaded {n_trials} trials, filtered out {n_filtered} trials with < {min_length} samples"
+    )
+    print(
+        f"Trial length stats: min={min(trial_lengths)}, max={max(trial_lengths)}, "
+        f"mean={np.mean(trial_lengths):.1f}")
     print(f"Using {len(trials)} trials for training")
 
     # Find max sequence length
-    max_length = max(trial.cursor_positions.shape[1] - 1 for trial in trials)  # -1 for shifting
+    max_length = max(trial.cursor_positions.shape[1] - 1
+                     for trial in trials)  # -1 for shifting
     print(f"Max sequence length: {max_length}")
 
     # Collect all cursor positions for normalization statistics
@@ -87,7 +93,7 @@ def load_and_prepare_data(dataset, normalize=True, min_length=10):
 
     # Compute normalization statistics
     position_mean = all_positions.mean(axis=0)  # (2,)
-    position_std = all_positions.std(axis=0)    # (2,)
+    position_std = all_positions.std(axis=0)  # (2,)
 
     # Add epsilon to prevent division by zero or very small numbers
     eps = 1e-6
@@ -112,7 +118,9 @@ def load_and_prepare_data(dataset, normalize=True, min_length=10):
         seq_length = n_samples - 1
         input_seq = np.zeros((seq_length, 4))
         input_seq[:, 0:2] = cursor_pos[:-1, :]  # Current cursor position
-        input_seq[:, 2:4] = np.tile(target_pos, (seq_length, 1))  # Target position (constant)
+        input_seq[:,
+                  2:4] = np.tile(target_pos,
+                                 (seq_length, 1))  # Target position (constant)
 
         # Create target sequence: [cursor_x[t+1], cursor_y[t+1]]
         # Use timesteps [1, 2, 3, ..., n-1]
@@ -120,8 +128,10 @@ def load_and_prepare_data(dataset, normalize=True, min_length=10):
 
         # Normalize if requested
         if normalize:
-            input_seq[:, 0:2] = (input_seq[:, 0:2] - position_mean) / position_std
-            input_seq[:, 2:4] = (input_seq[:, 2:4] - position_mean) / position_std
+            input_seq[:,
+                      0:2] = (input_seq[:, 0:2] - position_mean) / position_std
+            input_seq[:,
+                      2:4] = (input_seq[:, 2:4] - position_mean) / position_std
             target_seq = (target_seq - position_mean) / position_std
 
         # Pad to max_length
@@ -140,11 +150,13 @@ def load_and_prepare_data(dataset, normalize=True, min_length=10):
         masks_list.append(mask)
 
     # Stack into arrays
-    inputs = np.stack(inputs_list, axis=0)    # (n_trials, max_length, 4)
+    inputs = np.stack(inputs_list, axis=0)  # (n_trials, max_length, 4)
     targets = np.stack(targets_list, axis=0)  # (n_trials, max_length, 2)
-    masks = np.stack(masks_list, axis=0)      # (n_trials, max_length, 2)
+    masks = np.stack(masks_list, axis=0)  # (n_trials, max_length, 2)
 
-    print(f"Data shapes - inputs: {inputs.shape}, targets: {targets.shape}, masks: {masks.shape}")
+    print(
+        f"Data shapes - inputs: {inputs.shape}, targets: {targets.shape}, masks: {masks.shape}"
+    )
 
     return inputs, targets, masks, position_mean, position_std
 
@@ -186,8 +198,8 @@ def create_train_val_split(inputs, targets, masks, train_ratio=0.8, seed=None):
     val_targets = targets[val_indices]
     val_masks = masks[val_indices]
 
-    return (train_inputs, train_targets, train_masks,
-            val_inputs, val_targets, val_masks)
+    return (train_inputs, train_targets, train_masks, val_inputs, val_targets,
+            val_masks)
 
 
 def denormalize_positions(positions, mean, std):
@@ -198,6 +210,7 @@ def denormalize_positions(positions, mean, std):
 # ============================================================================
 # SECTION 3: LOSS FUNCTION
 # ============================================================================
+
 
 def masked_mse_loss(predictions, targets, masks):
     """
@@ -212,7 +225,7 @@ def masked_mse_loss(predictions, targets, masks):
         Scalar loss value
     """
     # Element-wise squared error
-    squared_error = (predictions - targets) ** 2
+    squared_error = (predictions - targets)**2
 
     # Apply mask
     masked_error = squared_error * masks
@@ -232,6 +245,7 @@ def masked_mse_loss(predictions, targets, masks):
 # ============================================================================
 # SECTION 4: TRAINING AND EVALUATION FUNCTIONS
 # ============================================================================
+
 
 def train_epoch(model, optimizer, train_loader, n_recurrent):
     """
@@ -268,9 +282,12 @@ def train_epoch(model, optimizer, train_loader, n_recurrent):
         # Check for inf/nan in outputs before computing loss
         if torch.isnan(outputs).any() or torch.isinf(outputs).any():
             print("WARNING: NaN/Inf in model outputs!")
-            print(f"  Output stats: min={outputs.min().item():.3f}, max={outputs.max().item():.3f}, "
-                  f"mean={outputs.mean().item():.3f}")
-            print(f"  Hidden stats: min={hidden_states.min().item():.3f}, max={hidden_states.max().item():.3f}")
+            print(
+                f"  Output stats: min={outputs.min().item():.3f}, max={outputs.max().item():.3f}, "
+                f"mean={outputs.mean().item():.3f}")
+            print(
+                f"  Hidden stats: min={hidden_states.min().item():.3f}, max={hidden_states.max().item():.3f}"
+            )
             return float('nan'), float('nan')
 
         # Compute loss
@@ -279,8 +296,12 @@ def train_epoch(model, optimizer, train_loader, n_recurrent):
         # Check for NaN in loss
         if torch.isnan(loss):
             print("WARNING: NaN loss detected!")
-            print(f"  Output range: [{outputs.min().item():.3f}, {outputs.max().item():.3f}]")
-            print(f"  Target range: [{batch_targets.min().item():.3f}, {batch_targets.max().item():.3f}]")
+            print(
+                f"  Output range: [{outputs.min().item():.3f}, {outputs.max().item():.3f}]"
+            )
+            print(
+                f"  Target range: [{batch_targets.min().item():.3f}, {batch_targets.max().item():.3f}]"
+            )
             return float('nan'), float('nan')
 
         # Backward pass
@@ -288,7 +309,8 @@ def train_epoch(model, optimizer, train_loader, n_recurrent):
         loss.backward()
 
         # Check gradient norm before clipping
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP_NORM)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                                   GRADIENT_CLIP_NORM)
         max_grad_norm = max(max_grad_norm, grad_norm.item())
 
         # Update
@@ -332,9 +354,12 @@ def evaluate(model, inputs, targets, masks, position_mean, position_std):
         normalized_mse = masked_mse_loss(outputs, targets, masks).item()
 
         # Compute denormalized MSE for interpretability
-        outputs_denorm = denormalize_positions(outputs, position_mean, position_std)
-        targets_denorm = denormalize_positions(targets, position_mean, position_std)
-        denormalized_mse = masked_mse_loss(outputs_denorm, targets_denorm, masks).item()
+        outputs_denorm = denormalize_positions(outputs, position_mean,
+                                               position_std)
+        targets_denorm = denormalize_positions(targets, position_mean,
+                                               position_std)
+        denormalized_mse = masked_mse_loss(outputs_denorm, targets_denorm,
+                                           masks).item()
 
     return {
         'normalized_mse': normalized_mse,
@@ -345,6 +370,7 @@ def evaluate(model, inputs, targets, masks, position_mean, position_std):
 # ============================================================================
 # SECTION 5: VISUALIZATION FUNCTIONS
 # ============================================================================
+
 
 def plot_training_curves(train_losses, val_losses, save_path):
     """Plot loss curves."""
@@ -362,7 +388,8 @@ def plot_training_curves(train_losses, val_losses, save_path):
     print(f"Saved training curves to {save_path}")
 
 
-def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean, position_std, save_path):
+def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean,
+                     position_std, save_path):
     """
     Visualize predictions for a single trial.
 
@@ -380,9 +407,9 @@ def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean, po
 
     with torch.no_grad():
         # Get single trial
-        trial_input = inputs[trial_idx:trial_idx+1]    # (1, max_length, 4)
-        trial_target = targets[trial_idx:trial_idx+1]  # (1, max_length, 2)
-        trial_mask = masks[trial_idx:trial_idx+1]      # (1, max_length, 2)
+        trial_input = inputs[trial_idx:trial_idx + 1]  # (1, max_length, 4)
+        trial_target = targets[trial_idx:trial_idx + 1]  # (1, max_length, 2)
+        trial_mask = masks[trial_idx:trial_idx + 1]  # (1, max_length, 2)
 
         max_length = trial_input.shape[1]
         n_recurrent = model.n_recurrent
@@ -394,9 +421,13 @@ def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean, po
         output, _ = model(trial_input, noise)
 
         # Denormalize before converting to numpy (more efficient)
-        output_denorm = denormalize_positions(output[0], position_mean, position_std).cpu().numpy()
-        target_denorm = denormalize_positions(trial_target[0], position_mean, position_std).cpu().numpy()
-        target_pos_denorm = denormalize_positions(trial_input[0, :, 2:4], position_mean, position_std).cpu().numpy()
+        output_denorm = denormalize_positions(output[0], position_mean,
+                                              position_std).cpu().numpy()
+        target_denorm = denormalize_positions(trial_target[0], position_mean,
+                                              position_std).cpu().numpy()
+        target_pos_denorm = denormalize_positions(trial_input[0, :, 2:4],
+                                                  position_mean,
+                                                  position_std).cpu().numpy()
 
         # Convert mask to numpy
         mask_np = trial_mask[0].cpu().numpy()  # (max_length, 2)
@@ -411,26 +442,58 @@ def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean, po
         plt.figure(figsize=(10, 8))
 
         # Plot ground truth trajectory
-        plt.plot(target_denorm[:valid_length, 0], target_denorm[:valid_length, 1],
-                'b-', linewidth=2, label='Ground Truth', alpha=0.7)
+        plt.plot(target_denorm[:valid_length, 0],
+                 target_denorm[:valid_length, 1],
+                 'b-',
+                 linewidth=2,
+                 label='Ground Truth',
+                 alpha=0.7)
 
         # Plot predicted trajectory
-        plt.plot(output_denorm[:valid_length, 0], output_denorm[:valid_length, 1],
-                'r--', linewidth=2, label='Predicted', alpha=0.7)
+        plt.plot(output_denorm[:valid_length, 0],
+                 output_denorm[:valid_length, 1],
+                 'r--',
+                 linewidth=2,
+                 label='Predicted',
+                 alpha=0.7)
 
         # Plot target position
-        plt.scatter(target_position[0], target_position[1],
-                   s=200, c='green', marker='*', label='Target', zorder=10, edgecolors='black')
+        plt.scatter(target_position[0],
+                    target_position[1],
+                    s=200,
+                    c='green',
+                    marker='*',
+                    label='Target',
+                    zorder=10,
+                    edgecolors='black')
 
         # Plot start position
-        plt.scatter(target_denorm[0, 0], target_denorm[0, 1],
-                   s=100, c='blue', marker='o', label='Start', zorder=10, edgecolors='black')
+        plt.scatter(target_denorm[0, 0],
+                    target_denorm[0, 1],
+                    s=100,
+                    c='blue',
+                    marker='o',
+                    label='Start',
+                    zorder=10,
+                    edgecolors='black')
 
         # Plot end positions
-        plt.scatter(target_denorm[valid_length-1, 0], target_denorm[valid_length-1, 1],
-                   s=100, c='blue', marker='s', label='GT End', zorder=10, edgecolors='black')
-        plt.scatter(output_denorm[valid_length-1, 0], output_denorm[valid_length-1, 1],
-                   s=100, c='red', marker='s', label='Pred End', zorder=10, edgecolors='black')
+        plt.scatter(target_denorm[valid_length - 1, 0],
+                    target_denorm[valid_length - 1, 1],
+                    s=100,
+                    c='blue',
+                    marker='s',
+                    label='GT End',
+                    zorder=10,
+                    edgecolors='black')
+        plt.scatter(output_denorm[valid_length - 1, 0],
+                    output_denorm[valid_length - 1, 1],
+                    s=100,
+                    c='red',
+                    marker='s',
+                    label='Pred End',
+                    zorder=10,
+                    edgecolors='black')
 
         plt.xlabel('X Position (mm)', fontsize=12)
         plt.ylabel('Y Position (mm)', fontsize=12)
@@ -447,6 +510,7 @@ def plot_predictions(model, inputs, targets, masks, trial_idx, position_mean, po
 # ============================================================================
 # SECTION 6: MAIN TRAINING SCRIPT
 # ============================================================================
+
 
 def main():
     """Main training function."""
@@ -466,7 +530,8 @@ def main():
     dataset = Dataset(DATA_PATH)
 
     # Prepare data
-    inputs, targets, masks, position_mean, position_std = load_and_prepare_data(dataset, normalize=True)
+    inputs, targets, masks, position_mean, position_std = load_and_prepare_data(
+        dataset, normalize=True)
 
     # Convert to tensors
     inputs = torch.FloatTensor(inputs)
@@ -476,15 +541,20 @@ def main():
     position_std = torch.FloatTensor(position_std)
 
     # Train/val split
-    (train_inputs, train_targets, train_masks,
-     val_inputs, val_targets, val_masks) = create_train_val_split(
-        inputs, targets, masks, train_ratio=TRAIN_RATIO, seed=RANDOM_SEED)
+    (train_inputs, train_targets, train_masks, val_inputs, val_targets,
+     val_masks) = create_train_val_split(inputs,
+                                         targets,
+                                         masks,
+                                         train_ratio=TRAIN_RATIO,
+                                         seed=RANDOM_SEED)
 
     # Create DataLoaders
     train_dataset = TensorDataset(train_inputs, train_targets, train_masks)
     val_dataset = TensorDataset(val_inputs, val_targets, val_masks)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(train_dataset,
+                              batch_size=BATCH_SIZE,
+                              shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # Initialize model
@@ -511,7 +581,8 @@ def main():
 
     for epoch in range(N_EPOCHS):
         # Train
-        train_loss, max_grad_norm = train_epoch(model, optimizer, train_loader, N_RECURRENT)
+        train_loss, max_grad_norm = train_epoch(model, optimizer, train_loader,
+                                                N_RECURRENT)
         train_losses.append(train_loss)
 
         # Check for NaN
@@ -521,7 +592,7 @@ def main():
 
         # Evaluate
         val_metrics = evaluate(model, val_inputs, val_targets, val_masks,
-                              position_mean, position_std)
+                               position_mean, position_std)
         val_loss = val_metrics['normalized_mse']
         val_rmse_denorm = np.sqrt(val_metrics['denormalized_mse'])
         val_losses.append(val_loss)
@@ -591,7 +662,7 @@ def main():
     for i in range(min(3, len(val_inputs))):
         plot_path = Path(PLOT_DIR) / f"prediction_trial_{i}.png"
         plot_predictions(model, val_inputs, val_targets, val_masks, i,
-                        position_mean, position_std, plot_path)
+                         position_mean, position_std, plot_path)
 
     print("=" * 80)
     print("All done!")
