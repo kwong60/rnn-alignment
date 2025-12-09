@@ -529,48 +529,48 @@ class Dataset:
         if output_file is None:
             output_file = f"trial_{trial_number}_neural.png"
 
-        fig = plt.figure(figsize=(16, 10))
+        fig = plt.figure(figsize=(14, 10))
         gs = fig.add_gridspec(4, 2, hspace=0.3, wspace=0.3)
 
         # Plot 1: Cursor trajectory
-        ax1 = fig.add_subplot(gs[0, 0])
-        ax1.plot(trial.cursor_positions[0, :],
-                 trial.cursor_positions[1, :],
-                 'b-',
-                 linewidth=2,
-                 label='Cursor path')
-        ax1.plot(trial.cursor_positions[0, 0],
-                 trial.cursor_positions[1, 0],
-                 'go',
-                 markersize=12,
-                 label='Start')
-        ax1.plot(trial.cursor_positions[0, -1],
-                 trial.cursor_positions[1, -1],
-                 'ro',
-                 markersize=12,
-                 label='End')
-        ax1.plot(trial.target_position[0],
-                 trial.target_position[1],
-                 'r*',
-                 markersize=20,
-                 label='Target')
-        ax1.set_xlabel('X position (mm)')
-        ax1.set_ylabel('Y position (mm)')
-        ax1.set_title(f'Trial {trial_number}: Cursor Trajectory')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        ax1.axis('equal')
+        # ax1 = fig.add_subplot(gs[0, 0])
+        # ax1.plot(trial.cursor_positions[0, :],
+        #          trial.cursor_positions[1, :],
+        #          'b-',
+        #          linewidth=2,
+        #          label='Cursor path')
+        # ax1.plot(trial.cursor_positions[0, 0],
+        #          trial.cursor_positions[1, 0],
+        #          'go',
+        #          markersize=12,
+        #          label='Start')
+        # ax1.plot(trial.cursor_positions[0, -1],
+        #          trial.cursor_positions[1, -1],
+        #          'ro',
+        #          markersize=12,
+        #          label='End')
+        # ax1.plot(trial.target_position[0],
+        #          trial.target_position[1],
+        #          'r*',
+        #          markersize=20,
+        #          label='Target')
+        # ax1.set_xlabel('X position (mm)')
+        # ax1.set_ylabel('Y position (mm)')
+        # ax1.set_title(f'Trial {trial_number}: Cursor Trajectory')
+        # ax1.legend()
+        # ax1.grid(True, alpha=0.3)
+        # ax1.axis('equal')
 
-        # Plot 2: Distance to target
-        ax2 = fig.add_subplot(gs[0, 1])
-        distance = np.sqrt(
-            (trial.cursor_positions[0, :] - trial.target_position[0])**2 +
-            (trial.cursor_positions[1, :] - trial.target_position[1])**2)
-        ax2.plot(trial.timestamps, distance, 'g-', linewidth=2)
-        ax2.set_xlabel('Time (s)')
-        ax2.set_ylabel('Distance to target (mm)')
-        ax2.set_title(f'Trial {trial_number}: Distance to Target')
-        ax2.grid(True, alpha=0.3)
+        # # Plot 2: Distance to target
+        # ax2 = fig.add_subplot(gs[0, 1])
+        # distance = np.sqrt(
+        #     (trial.cursor_positions[0, :] - trial.target_position[0])**2 +
+        #     (trial.cursor_positions[1, :] - trial.target_position[1])**2)
+        # ax2.plot(trial.timestamps, distance, 'g-', linewidth=2)
+        # ax2.set_xlabel('Time (s)')
+        # ax2.set_ylabel('Distance to target (mm)')
+        # ax2.set_title(f'Trial {trial_number}: Distance to Target')
+        # ax2.grid(True, alpha=0.3)
 
         # Plot 3: Spike raster
         ax3 = fig.add_subplot(gs[1:3, :])
@@ -598,7 +598,7 @@ class Dataset:
                 # Plot as raster
                 ax3.scatter(spike_times_rel,
                             np.ones_like(spike_times_rel) * neuron_id,
-                            c=colors[unit % len(colors)],
+                            c=colors[unit],
                             s=5,
                             alpha=0.6)
 
@@ -615,6 +615,12 @@ class Dataset:
         ax3.set_yticklabels(ytick_labels[::5])
         ax3.grid(True, alpha=0.3, axis='x')
         ax3.set_xlim([0, trial.duration])
+
+        # create legend 
+        for i, label in enumerate(unit_labels):
+            ax3.scatter([], [], color=colors[i], label=label)
+
+        ax3.legend(loc='upper right')
 
         # Plot 4: Population firing rate
         ax4 = fig.add_subplot(gs[3, :])
@@ -643,6 +649,8 @@ class Dataset:
                       fontsize=14)
         ax4.grid(True, alpha=0.3)
         ax4.set_xlim([0, trial.duration])
+
+        plt.subplots_adjust(top=1.4)
 
         if output_file:
             plt.savefig(output_file, dpi=150, bbox_inches='tight')
