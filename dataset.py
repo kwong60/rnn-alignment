@@ -86,6 +86,9 @@ class Dataset:
         # Load continuous data
         self._load_continuous_data()
 
+        # Preload spike times into memory for faster access
+        self._preload_spike_times()
+
         # Segment into trials
         self._segment_trials()
 
@@ -111,6 +114,32 @@ class Dataset:
         self.number_of_units = self.spikes_ref.shape[0]
         self.duration = self.timestamps[-1] - self.timestamps[0]
         self.sampling_rate = 1.0 / np.median(np.diff(self.timestamps))
+
+    def _preload_spike_times(self):
+        """Load all spike time arrays once to avoid repeated HDF5 access."""
+
+        print("Preloading spike times...")
+
+        self.all_spike_times = {}
+        spikes_ref = self.spikes_ref
+
+        n_units = spikes_ref.shape[0]
+        n_channels = spikes_ref.shape[1]
+
+        for unit in range(n_units):
+            for channel in range(n_channels):
+                spike_ref = spikes_ref[unit, channel]
+                if spike_ref:
+                    ds = self._file[spike_ref]
+                    if ds.size > 2:
+                        # Load once
+                        self.all_spike_times[(channel, unit)] = ds[:].flatten()
+                    else:
+                        self.all_spike_times[(channel, unit)] = np.array([])
+                else:
+                    self.all_spike_times[(channel, unit)] = np.array([])
+
+        print("Spike times preloaded.")
 
     def _load_channel_names(self):
         """Load and decode channel names."""
@@ -184,23 +213,18 @@ class Dataset:
         spike_times_dict = {}
         spike_counts_dict = {}
 
-        for channel in range(self.number_of_channels):
-            for unit in range(self.number_of_units):
-                spike_ref = self.spikes_ref[unit, channel]
-                if spike_ref:
-                    spike_data = self._file[spike_ref]
-                    if spike_data.size > 2:  # Not empty reference
-                        all_spike_times = spike_data[:].flatten()
+        for (channel, unit), all_spike_times in self.all_spike_times.items():
+            if len(all_spike_times) == 0:
+                continue
 
-                        # Filter spikes within trial time range
-                        trial_spikes = all_spike_times[
-                            (all_spike_times >= start_time)
-                            & (all_spike_times <= end_time)]
+            # fast slice — no HDF5 calls
+            mask = (all_spike_times >= start_time) & (all_spike_times
+                                                      <= end_time)
+            trial_spikes = all_spike_times[mask]
 
-                        if len(trial_spikes) > 0:
-                            spike_times_dict[(channel, unit)] = trial_spikes
-                            spike_counts_dict[(channel,
-                                               unit)] = len(trial_spikes)
+            if len(trial_spikes) > 0:
+                spike_times_dict[(channel, unit)] = trial_spikes
+                spike_counts_dict[(channel, unit)] = len(trial_spikes)
 
         return Trial(
             trial_number=trial_number,
@@ -616,7 +640,7 @@ class Dataset:
         ax3.grid(True, alpha=0.3, axis='x')
         ax3.set_xlim([0, trial.duration])
 
-        # create legend 
+        # create legend
         for i, label in enumerate(unit_labels):
             ax3.scatter([], [], color=colors[i], label=label)
 
