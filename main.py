@@ -41,11 +41,19 @@ class ProcessedData:
             t for t in trials if t.cursor_positions.shape[1] >= min_length
         ]
 
+
         max_length = max(trial.cursor_positions.shape[1]
                          for trial in trials) - 1
+        # print(max_length)
 
         assert max_length >= min_length
         assert max_length > 0
+
+        # max_bin_size = max(((trial.end_time - trial.start_time) / max_length) 
+        #                    for trial in trials) - 1
+        # print(max_bin_size)
+        
+
 
         # Compute normalization statistics
         all_positions = np.concatenate(
@@ -62,6 +70,9 @@ class ProcessedData:
         for trial in trials:
             padded_input, padded_target, mask = util.process_trial(
                 trial, position_mean, position_std, max_length)
+            neural_mat = util.process_neural_trial(trial, 1, max_length)
+            print(neural_mat.shape)
+            
             inputs_list.append(padded_input)
             targets_list.append(padded_target)
             masks_list.append(mask)
@@ -72,6 +83,7 @@ class ProcessedData:
         self.position_mean = position_mean
         self.position_std = position_std
         self.max_length = max_length
+        self.neural_inputs = ...
 
     def split_train_val(
             self, train_ratio: float) -> Tuple[TensorDataset, TensorDataset]:
@@ -130,6 +142,9 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
 
         # Backward pass
         optimizer.zero_grad()
+
+
+
         loss.backward()
 
         optimizer.step()
