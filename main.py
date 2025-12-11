@@ -124,6 +124,7 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
         noise = torch.zeros(batch_size_actual, max_length, model.n_recurrent)
 
         outputs, hidden_states = model(batch_inputs, noise)
+        print(util.procrustes_loss(hidden_states, hidden_states, batch_masks))
 
         all_hidden_states.append(hidden_states.detach())
 
