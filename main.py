@@ -244,9 +244,8 @@ if __name__ == "__main__":
         Path(PLOT_DIR) / "training_curves.png", train_losses, val_losses,
         val_losses_denorm)
     # Plot prediction on a random validation trial
-    random_val_index = np.random.randint(0, dataset.number_of_trials)
-    random_val_trial = dataset.get_trial(random_val_index)
+    random_trial = dataset.get_trial(180)
     plot.trial_prediction(
-        Path(PLOT_DIR) / "trial_prediction.png", model, random_val_trial,
+        Path(PLOT_DIR) / "trial_prediction.png", model, random_trial,
         processed_data.position_mean, processed_data.position_std,
         processed_data.max_length)
