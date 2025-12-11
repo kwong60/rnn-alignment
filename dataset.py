@@ -681,17 +681,3 @@ class Dataset:
             print(f"Saved neural visualization to '{output_file}'")
 
         return fig
-
-    def __del__(self):
-        """Close the HDF5 file when the object is destroyed."""
-        if hasattr(self, '_file') and self._file:
-            self._file.close()
-
-    def __enter__(self):
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        if hasattr(self, '_file') and self._file:
-            self._file.close()
