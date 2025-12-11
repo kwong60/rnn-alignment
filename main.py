@@ -22,7 +22,6 @@ DATA_PATH = "data/indy_20160407_02.mat"
 PLOT_DIR = "plots/"
 
 
-
 class ProcessedData:
     inputs: torch.FloatTensor
     targets: torch.FloatTensor
