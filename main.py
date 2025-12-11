@@ -108,11 +108,13 @@ def masked_mse_loss(predictions, targets, masks):
 
 
 def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
-                train_loader: DataLoader) -> float:
+                train_loader: DataLoader) -> tuple[float, torch.Tensor]:
     model.train()
 
     epoch_loss = 0.0
     num_batches = 0
+
+    all_hidden_states = []
 
     for batch_inputs, batch_targets, batch_masks in train_loader:
         batch_size_actual = batch_inputs.shape[0]
@@ -122,6 +124,9 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
         noise = torch.zeros(batch_size_actual, max_length, model.n_recurrent)
 
         outputs, hidden_states = model(batch_inputs, noise)
+
+        all_hidden_states.append(hidden_states.detach())
+
         # TODO: Do something with hidden_states?
         assert torch.isfinite(outputs).all()
 
@@ -137,7 +142,9 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
         epoch_loss += loss.item()
         num_batches += 1
 
-    return epoch_loss / num_batches
+    all_hidden_states = torch.cat(all_hidden_states, dim=0)  # (n_train_trials, n_T, n_recurrent)
+    
+    return epoch_loss / num_batches, all_hidden_states
 
 
 def denormalize_positions(positions: torch.Tensor, position_mean: np.ndarray,
@@ -193,15 +200,16 @@ if __name__ == "__main__":
     val_losses_denorm = []
 
     weight_history = []
+    hidden_state_history = []
 
-    SAVE_INTERVAL = 5 
+    SAVE_INTERVAL = 1
     
     eval_inputs, eval_targets, eval_masks = val_data.tensors
 
     for epoch in range(N_EPOCHS):
         print(f"Epoch {epoch + 1}/{N_EPOCHS}")
         # TRAINING
-        train_loss = train_epoch(model, optimizer, train_loader)
+        train_loss, hidden_states = train_epoch(model, optimizer, train_loader)
 
         assert np.isfinite(train_loss)
         train_losses.append(train_loss)
@@ -227,14 +235,31 @@ if __name__ == "__main__":
             with torch.no_grad():
                 max_length = eval_inputs.shape[1]
                 noise = torch.zeros(len(eval_inputs), max_length, N_RECURRENT)
-                weight_history.append({
+                # weight_history.append({
+                #     'epoch': epoch,
+                #     'weights': model.get_weight_snapshot(),
+                #     'train_loss': train_loss,
+                #     'val_loss': val_loss,
+                # })
+
+                _, hidden_states = model(eval_inputs, noise)
+        
+                print(f"\nHidden states at epoch {epoch}:")
+                print(f"  Shape: {hidden_states.shape}")
+                print(f"  Min: {hidden_states.min().item():.4f}")
+                print(f"  Max: {hidden_states.max().item():.4f}")
+                print(f"  Mean: {hidden_states.mean().item():.4f}")
+          
+                print(f"  First 5 units:")
+                print(f"  {hidden_states[1, 1, :5]}")
+     
+                hidden_state_history.append({
                     'epoch': epoch,
-                    'weights': model.get_weight_snapshot(),
-                    'train_loss': train_loss,
+                    'hidden_states': hidden_states.clone(),  # (eval_batch_size, n_T, n_recurrent)
                     'val_loss': val_loss,
                 })
-            
-            model.train()
+        
+        model.train()
 
     # PLOTTING
     # Create plot directory if it doesn't exist
