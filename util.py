@@ -45,9 +45,9 @@ def procrustes_loss(hidden: torch.Tensor, neural: torch.Tensor,
         # numerator = sum of singular values
         num = S.sum()
         # denominator = Frobenius norm of XR before scaling
-        denom = (h0 @ R).pow(2).sum() + 1e-6
+        denom = (h0 @ R).pow(2).sum().clamp(min=1e-12)
 
-        scale = num / denom.sqrt()  # better formulation
+        scale = num / denom  # better formulation
 
         # aligned hidden states
         h_aligned = (h0 @ R) * scale
