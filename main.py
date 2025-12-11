@@ -13,7 +13,7 @@ N_INPUT = 4  # [cursor_x, cursor_y, target_x, target_y]
 N_RECURRENT = 128  # Hidden units
 N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
-N_EPOCHS = 20
+N_EPOCHS = 10
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 32
 TRAIN_RATIO = 0.8
@@ -191,6 +191,13 @@ if __name__ == "__main__":
     train_losses = []
     val_losses = []
     val_losses_denorm = []
+
+    weight_history = []
+
+    SAVE_INTERVAL = 5 
+    
+    eval_inputs, eval_targets, eval_masks = val_data.tensors
+
     for epoch in range(N_EPOCHS):
         print(f"Epoch {epoch + 1}/{N_EPOCHS}")
         # TRAINING
@@ -213,6 +220,21 @@ if __name__ == "__main__":
         print(
             f"  Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Val Loss (denorm): {val_loss_denorm:.6f}"
         )
+
+        # save weights every SAVE_INTERVAL epochs
+        if epoch % SAVE_INTERVAL == 0:
+            model.eval()
+            with torch.no_grad():
+                max_length = eval_inputs.shape[1]
+                noise = torch.zeros(len(eval_inputs), max_length, N_RECURRENT)
+                weight_history.append({
+                    'epoch': epoch,
+                    'weights': model.get_weight_snapshot(),
+                    'train_loss': train_loss,
+                    'val_loss': val_loss,
+                })
+            
+            model.train()
 
     # PLOTTING
     # Create plot directory if it doesn't exist
