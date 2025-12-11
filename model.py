@@ -52,3 +52,13 @@ class CTRNN(nn.Module):
     @property
     def n_parameters(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def get_weight_snapshot(self):
+        """Get a snapshot of current weights."""
+        return {
+            'fc_x2ah_weight': self.fc_x2ah.weight.data.clone(),
+            'fc_x2ah_bias': self.fc_x2ah.bias.data.clone(),
+            'fc_h2ah_weight': self.fc_h2ah.weight.data.clone(),
+            'fc_h2y_weight': self.fc_h2y.weight.data.clone(),
+            'fc_h2y_bias': self.fc_h2y.bias.data.clone(),
+        }

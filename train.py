@@ -23,7 +23,7 @@ N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
 # Training parameters
 LEARNING_RATE = 1e-3
-N_EPOCHS = 100
+N_EPOCHS = 25
 BATCH_SIZE = 32
 GRADIENT_CLIP_NORM = 10.0
 TRAIN_RATIO = 0.8
@@ -579,6 +579,14 @@ def main():
     val_losses = []
     best_val_loss = float('inf')
 
+    weight_history = []
+
+    SAVE_INTERVAL = 5 
+    
+    eval_inputs = val_inputs[:len(val_inputs)]
+    eval_targets = val_targets[:len(val_inputs)]
+    eval_masks = val_masks[:len(val_inputs)]
+
     for epoch in range(N_EPOCHS):
         # Train
         train_loss, max_grad_norm = train_epoch(model, optimizer, train_loader,
@@ -596,6 +604,21 @@ def main():
         val_loss = val_metrics['normalized_mse']
         val_rmse_denorm = np.sqrt(val_metrics['denormalized_mse'])
         val_losses.append(val_loss)
+
+        # save weights every SAVE_INTERVAL epochs
+        if epoch % SAVE_INTERVAL == 0:
+            model.eval()
+            with torch.no_grad():
+                max_length = eval_inputs.shape[1]
+                noise = torch.zeros(len(val_inputs), max_length, N_RECURRENT)
+                weight_history.append({
+                    'epoch': epoch,
+                    'weights': model.get_weight_snapshot(),
+                    'train_loss': train_loss,
+                    'val_loss': val_loss,
+                })
+            
+            model.train()
 
         # Log progress
         if epoch % 10 == 0 or epoch == N_EPOCHS - 1:
@@ -652,6 +675,20 @@ def main():
     }
     torch.save(checkpoint, final_model_path)
     print(f"Saved final model to {final_model_path}")
+
+    history_path = Path(CHECKPOINT_DIR) / "training_history.pth"
+    history_data = {
+        'weight_history': weight_history,
+        'eval_inputs': eval_inputs,
+        'eval_targets': eval_targets,
+        'eval_masks': eval_masks,
+        'position_mean': position_mean,
+        'position_std': position_std,
+        'train_losses': train_losses,
+        'val_losses': val_losses,
+    }
+    torch.save(history_data, history_path)
+    print(f"Saved training history to {history_path}")
 
     # Plot training curves
     plot_path = Path(PLOT_DIR) / "training_curves.png"
