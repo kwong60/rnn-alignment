@@ -4,16 +4,12 @@ import sklearn
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from scipy.spatial import procrustes
+from scipy.linalg import orthogonal_procrustes
 from scipy.spatial.distance import pdist, squareform
-dataset = Dataset("583331/indy_20160407_02.mat")
 
-# print(dataset.get_trial(0).spike_times)
-
+dataset = Dataset("data/indy_20160407_02.mat")
 
 
-# print(dataset.get_trial(1))
-# Print statistics
-# print(dataset)
 # # neurons x bin size
 # trial 1
 # 282 neurons and duration = 1.25s
@@ -21,21 +17,15 @@ dataset = Dataset("583331/indy_20160407_02.mat")
 # (282 x 63)
 # # channel, unit 
 
-# trial 558
+# max trial 558
 # 310 neurons, 651 
+# max duration = 13.016000000000076
 
 
 ####### ISSUES ####### 
 # trials are different durations
 # active neurons in each trial differs
 # large firing rates because small bin size
-
-# need same binning and timestep in RNN
-
-# RNN: H = hidden_dim × time
-
-# have to make dimensions compatible
-# potentially pca 
 
 
 # stats = dataset.get_unit_statistics()
@@ -57,11 +47,6 @@ def max_over_trials(dataset):
     max_dur = durations[np.argmax(durations)]
     max_neuron = neuron_counts[np.argmax(neuron_counts)]
     return max_dur, max_neuron
-
-
-### trial = 558 ###
-# max duration = 13.016000000000076
-# max neurons = 310
 
 def create_fr_mat(trial_num, bin_size=0.02):
     '''
@@ -102,30 +87,60 @@ def create_fr_mat(trial_num, bin_size=0.02):
 
 # (neurons, bins)
 
-fr_mat_trial = create_fr_mat(558)
-# print(fr_mat_trial)
-print(fr_mat_trial.shape)
+def trial_dsim_mat(fr_matrix):
+    '''
+    Creates mean centered matrix for given trial firing rate matrix (filtered unit)
+    
+    :param fr_matrix: one trial firing rate matrix
+    '''
 
-avg_fr = np.mean(fr_mat_trial, axis=1)
-
-print(len(avg_fr))
-
-norm = fr_mat_trial.T - avg_fr
-
-print(norm)
-
-dsim_neurons = squareform(pdist(norm.T, metric="correlation"))
-
-plt.imshow(dsim_neurons)
-plt.imshow(dsim_neurons)
-plt.colorbar()
-plt.show()
+    avg_fr = np.mean(fr_matrix, axis=1)
+    std_fr = np.std(fr_matrix, axis=1)
 
 
+    norm = (fr_matrix.T - avg_fr) / std_fr
 
 
+    dsim_neurons = squareform(pdist(norm.T, metric="correlation"))
+
+    plt.imshow(dsim_neurons)
+    plt.imshow(dsim_neurons)
+    plt.colorbar()
+    plt.show()
+    return dsim_neurons
+
+
+for i in range(20):
+    ...
+
+
+fr_mat_trial1 = create_fr_mat(1)
+
+fr_mat_trial5 = create_fr_mat(5)
+
+print(fr_mat_trial1.shape)
+
+one_dsim = trial_dsim_mat(fr_mat_trial1)
+
+five_dsim = trial_dsim_mat(fr_mat_trial5)
+
+### HIDDEN STATE 
+# 32 x  3254 x 128,
+# batch, max seq length, hidden_size
+
+pca = PCA(n_components=2)
+one = pca.fit_transform(one_dsim)
+
+pca = PCA(n_components=2)
+
+five = pca.fit_transform(five_dsim)
+print(one.shape, five.shape)
+
+r, disparity = orthogonal_procrustes(one, five)
+print(round(disparity))
 # trials = [create_fr_mat(i) for i in range(max_trials)]
 
+# print(one_dsim.shape, five_dsim.shape)
 
 
 def pad_trials_mat(trial_mats, max_neurons=310, max_bin=651, num_trials=563):
@@ -157,26 +172,24 @@ def pad_trials_mat(trial_mats, max_neurons=310, max_bin=651, num_trials=563):
 # np.save("all_trials.npy", matrix)
 
 # data = (num_trials, num_neurons, time_bins)
-data = np.load("all_trials.npy")
-
-# print(data.shape)
+# data = np.load("all_trials.npy")
 
 
-init_X = data.copy()
+# init_X = data.copy()
 # need to normalize firing rates 
 N_max = 310
 B_max = 651
 T_max = 563
 
-X = init_X.reshape((B_max * T_max, N_max))
+# X = init_X.reshape((B_max * T_max, N_max))
 # reshape so (trial * bins, neurons)
 # print(X.reshape(-1, N_max).shape)
 
 # (neurons,)
-neuron_means = np.nanmean(X.reshape(-1, N_max), axis=0)
+# neuron_means = np.nanmean(X.reshape(-1, N_max), axis=0)
 # print(neuron_means.shape)
-norm_X = X - neuron_means
-two_dim_mat = np.where(np.isnan(norm_X), neuron_means, norm_X)
+# norm_X = X - neuron_means
+# two_dim_mat = np.where(np.isnan(norm_X), neuron_means, norm_X)
 
 # (trial*bins, neurons) = (366513, 310)
 # print(two_dim_mat.shape)
@@ -193,32 +206,32 @@ two_dim_mat = np.where(np.isnan(norm_X), neuron_means, norm_X)
 # ABOVE
 ########################################################################
 # perform pca 
-d = 2
+# d = 2
 # summarize 
 
 # max variance across time x trials in neuron space
-# patterns of neuron population activity
-pca = PCA(n_components=d)
+# # patterns of neuron population activity
+# pca = PCA(n_components=d)
 
-pca.fit(two_dim_mat)
-
-
-# # neural traj in pca space
+# pca.fit(two_dim_mat)
 
 
-trial_mat = init_X[0]  # shape (num_neurons, time_bins)
-# each neuron is a row
+# # # neural traj in pca space
 
-norm = (trial_mat.T - neuron_means) 
+
+# trial_mat = init_X[0]  # shape (num_neurons, time_bins)
+# # each neuron is a row
+
+# norm = (trial_mat.T - neuron_means) 
 
 
 # # shape (time_bins, num_neurons)
-trial_mat_norm = np.where(np.isnan(norm), neuron_means, norm)
+# trial_mat_norm = np.where(np.isnan(norm), neuron_means, norm)
 
 
-# project trial into pca space
-trial_pca = pca.transform(trial_mat_norm)      # shape (time_bins, d)
-trial_pca = trial_pca.T 
+# # project trial into pca space
+# trial_pca = pca.transform(trial_mat_norm)      # shape (time_bins, d)
+# trial_pca = trial_pca.T 
 
 # (d, 651)
 
@@ -231,13 +244,13 @@ trial_pca = trial_pca.T
 # plt.show()
 # print(trial_pca.shape)
 
+
+
+##### SYNTHETIC PROCRUSTES ##### 
 # a = np.array([[1, 3], [1, 2], [1, 1], [2, 1]])
 # b = np.array([[4, -2], [4, -4], [4, -6], [2, -6]])
 
 # ax, fig = plt.subplots(())
-
-
-
 # mtx1, mtx2, disparity = procrustes(a, b)
 # print(round(disparity))
 
