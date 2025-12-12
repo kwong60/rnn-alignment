@@ -13,14 +13,13 @@ N_INPUT = 4  # [cursor_x, cursor_y, target_x, target_y]
 N_RECURRENT = 128  # Hidden units
 N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
-N_EPOCHS = 10
+N_EPOCHS = 20
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 32
 TRAIN_RATIO = 0.8
 
 DATA_PATH = "data/indy_20160407_02.mat"
 PLOT_DIR = "plots/"
-
 
 class ProcessedData:
     inputs: torch.FloatTensor
@@ -206,6 +205,19 @@ if __name__ == "__main__":
     
     eval_inputs, eval_targets, eval_masks = val_data.tensors
 
+    eval_trials = eval_inputs.shape[0]
+
+    max_len = 0
+    longest_trial_idx = 0
+
+    for i in range(eval_trials):
+        n_timesteps = (eval_masks[i] > 0).sum().item()
+        if n_timesteps > max_len:
+            max_len = n_timesteps
+            longest_trial_idx = i
+
+    print(f"Longest trial in validation set: {longest_trial_idx} with {max_len} timesteps")
+
     for epoch in range(N_EPOCHS):
         print(f"Epoch {epoch + 1}/{N_EPOCHS}")
         # TRAINING
@@ -244,15 +256,6 @@ if __name__ == "__main__":
 
                 _, hidden_states = model(eval_inputs, noise)
         
-                print(f"\nHidden states at epoch {epoch}:")
-                print(f"  Shape: {hidden_states.shape}")
-                print(f"  Min: {hidden_states.min().item():.4f}")
-                print(f"  Max: {hidden_states.max().item():.4f}")
-                print(f"  Mean: {hidden_states.mean().item():.4f}")
-          
-                print(f"  First 5 units:")
-                print(f"  {hidden_states[1, 1, :5]}")
-     
                 hidden_state_history.append({
                     'epoch': epoch,
                     'hidden_states': hidden_states.clone(),  # (eval_batch_size, n_T, n_recurrent)
@@ -274,3 +277,6 @@ if __name__ == "__main__":
         Path(PLOT_DIR) / "trial_prediction.png", model, random_trial,
         processed_data.position_mean, processed_data.position_std,
         processed_data.max_length)
+    # Plot hidden states comparison
+    plot.hidden_states(Path(PLOT_DIR) / "hidden_states_comp.png", hidden_state_history,
+        longest_trial_idx, eval_masks)
