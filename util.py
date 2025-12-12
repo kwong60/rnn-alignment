@@ -4,6 +4,113 @@ import torch
 
 from dataset import Trial
 
+def procrustes_loss(hidden: torch.Tensor, neural: torch.Tensor,
+                    mask: torch.Tensor) -> torch.Tensor:
+    """
+    hidden : (B, T, H)
+    neural : (B, T, N)
+    mask   : (B, T, 1)
+
+    Computes rectangular generalized Procrustes alignment loss.
+    """
+    assert hidden.shape[0] == neural.shape[0] == mask.shape[0]
+    B = hidden.shape[0]
+
+    losses = []
+
+    for i in range(B):
+        h = hidden[i]  # (T, H)
+        y = neural[i]  # (T, N)
+        m = mask[i, :, 0] > 0
+
+        h = h[m]
+        y = y[m]
+
+        # Center
+        h0 = h - h.mean(dim=0, keepdim=True)
+        y0 = y - y.mean(dim=0, keepdim=True)
+
+        # small regularization for numerical stability
+        eps = 1e-6
+        h0 = h0 + eps * torch.randn_like(h0)
+        y0 = y0 + eps * torch.randn_like(y0)
+
+        # Procrustes without gradients
+        with torch.no_grad():
+            # Cross-covariance
+            C = h0.T @ y0  # (H, N)
+                
+            # add regularization to C
+            C = C + eps * torch.eye(C.shape[0], C.shape[1], device=C.device)
+                
+            # SVD
+            U, S, Vt = torch.linalg.svd(C, full_matrices=False)
+            V = Vt.T
+                
+            # rotation
+            R = U @ V.T  # (H, N)
+                
+            # compute scale
+            num = S.sum()
+            denom = (h0 @ R).pow(2).sum().clamp(min=1e-8)
+            scale = num / denom
+            scale = scale.clamp(min=1e-3, max=1e3)  
+                
+        # apply transformation with gradients
+        h_aligned = (h0 @ R.detach()) * scale.detach()
+
+        # alignment loss
+        loss = ((h_aligned - y0)**2).mean()
+        losses.append(loss)
+
+    return torch.stack(losses).mean()
+
+def compute_alignment(hidden: torch.Tensor, neural: torch.Tensor, 
+                              mask: torch.Tensor) -> dict:  
+    with torch.no_grad():
+        # first batch only
+        h = hidden[0]  # (T, H)
+        y = neural[0]  # (T, N)
+        m = mask[0, :, 0] > 0
+        
+        h = h[m]
+        y = y[m]
+        
+        if h.shape[0] < 2:
+            return {'correlation': 0.0, 'mse_after_alignment': float('inf')}
+        
+        # Center
+        h0 = h - h.mean(dim=0, keepdim=True)
+        y0 = y - y.mean(dim=0, keepdim=True)
+        
+        # Procrustes alignment
+        C = h0.T @ y0
+        U, S, Vt = torch.linalg.svd(C, full_matrices=False)
+        R = U @ Vt
+        
+        # Align
+        h_aligned = h0 @ R
+
+        # correlation between aligned representations
+        correlation = torch.corrcoef(torch.cat([
+            h_aligned.flatten().unsqueeze(0),
+            y0.flatten().unsqueeze(0)
+        ]))[0, 1].item()
+        
+        # MSE after alignment
+        mse = ((h_aligned - y0)**2).mean().item()
+        
+        # explained variance
+        var_y = y0.var()
+        var_residual = (y0 - h_aligned).var()
+        r_squared = 1 - (var_residual / var_y)
+        r_squared = r_squared.item()
+        
+        return {
+            'correlation': correlation,
+            'mse_after_alignment': mse,
+            'r_squared': r_squared,
+        }
 
 def process_trial(
         trial: Trial, position_mean: np.ndarray, position_std: np.ndarray,
@@ -49,7 +156,7 @@ def process_neural_trial(trial: Trial, unit: int, max_length: int):
     neuron_len = len(neurons)
     
     num_bins = len(bins) - 1
-    
+
     padded_fr_mat = np.zeros((neuron_len, num_bins))
 
     for j, (c, u) in enumerate(neurons):   
