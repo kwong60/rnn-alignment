@@ -2,6 +2,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from sklearn.decomposition import PCA
 
 from dataset import Trial
 from model import CTRNN
@@ -147,6 +148,32 @@ def trial_prediction(save_path: Path, model: CTRNN, trial: Trial,
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     plt.axis("equal")
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+
+def hidden_states(save_path: Path, hidden_state_history: list[dict], 
+                  longest_trial_idx: int, eval_masks: torch.Tensor) -> None:  
+    
+    fig, axes = plt.subplots(5, 4, figsize=(18, 16))
+    axes = axes.flatten()
+
+    for i, h in enumerate(hidden_state_history):
+        ax = axes[i]
+
+        hidden = h['hidden_states']
+
+        mask = eval_masks[longest_trial_idx, :, 0]
+        actual_len = int(mask.sum().item())
+
+        im0 = ax.imshow(hidden[longest_trial_idx, :actual_len, :].T.numpy(), 
+                        aspect='auto', cmap='RdBu_r', interpolation='nearest')
+        
+        ax.set_xlabel('Time Step')
+        ax.set_ylabel('Hidden Unit')
+        ax.set_title(f'Epoch {i} - Trial {longest_trial_idx}')
+        plt.colorbar(im0, ax=ax, label='Activation')
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150)
