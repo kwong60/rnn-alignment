@@ -49,11 +49,8 @@ class ProcessedData:
         assert max_length >= min_length
         assert max_length > 0
 
-        # max_bin_size = max(((trial.end_time - trial.start_time) / max_length) 
-        #                    for trial in trials) - 1
-        # print(max_bin_size)
-        
-
+        max_neurons = max([sum(1 for (_, u), count in trial.spike_counts.items() if u ==1 and count > 0 ) for trial in trials])
+        # print('max_neurons', max_neurons)
 
         # Compute normalization statistics
         all_positions = np.concatenate(
@@ -71,7 +68,8 @@ class ProcessedData:
         for trial in trials:
             padded_input, padded_target, mask = util.process_trial(
                 trial, position_mean, position_std, max_length)
-            neural_mat = util.process_neural_trial(trial, 1, max_length)
+            neural_mat, mask = util.process_neural_trial(trial, 1, max_length, max_neurons)
+            # print(neural_mat.shape)
             
             inputs_list.append(padded_input)
             targets_list.append(padded_target)

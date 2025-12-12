@@ -146,30 +146,33 @@ def process_trial(
 
     return padded_input, padded_target, mask
 
-def process_neural_trial(trial: Trial, unit: int, max_length: int):
+def process_neural_trial(trial: Trial, unit: int, max_length: int, max_neurons):
     start = trial.start_time
     end = trial.end_time
     bin_size = (end - start) / max_length
     
     bins = np.linspace(start, end, max_length + 1)
-    neurons = [(c, u) for (c, u) in trial.spike_counts.keys() if u == unit and trial.spike_counts[(c, u)] > 0]
+    neurons = [(c, u) for (c, u), count in trial.spike_counts.items() if u == unit and count > 0]
     neuron_len = len(neurons)
     
     num_bins = len(bins) - 1
 
-    padded_fr_mat = np.zeros((neuron_len, num_bins))
+    padded_fr_mat = np.zeros((max_neurons, num_bins))
+    # print(num_bins)
 
     for j, (c, u) in enumerate(neurons):   
         times = trial.spike_times[(c, u)]
         # turn times into binned counts to add to matrix
+        # counts length is max_length size
         counts, _ = np.histogram(times, bins)
+        # print(counts)
         # (#neurons x #max_bins)
         padded_fr_mat[j] = counts / bin_size
 
-    # mask = np.zeros((len(neurons), max_bin_size))
-    # mask[:, :bin_size] = 1
-    # print(f'mat: {padded_fr_mat.shape}, bin_size {bin_size}, num_bins:{num_bins}')
-    return padded_fr_mat
+    mask = np.zeros((max_neurons, max_length))
+    mask[:neuron_len, :] = 1
+    
+    return padded_fr_mat, mask
 
 
 def denormalize_positions(positions: torch.Tensor, position_mean: np.ndarray,
