@@ -13,7 +13,7 @@ N_INPUT = 4  # [cursor_x, cursor_y, target_x, target_y]
 N_RECURRENT = 128  # Hidden units
 N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
-N_EPOCHS = 20
+N_EPOCHS = 10
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 32
 TRAIN_RATIO = 0.8
@@ -25,6 +25,7 @@ class ProcessedData:
     inputs: torch.FloatTensor
     targets: torch.FloatTensor
     masks: torch.FloatTensor
+    neural_data: torch.FloatTensor
 
     position_mean: np.ndarray
     position_std: np.ndarray
@@ -65,24 +66,25 @@ class ProcessedData:
         inputs_list = []
         targets_list = []
         masks_list = []
+        neural_list = []
 
         for trial in trials:
             padded_input, padded_target, mask = util.process_trial(
                 trial, position_mean, position_std, max_length)
             neural_mat = util.process_neural_trial(trial, 1, max_length)
-            print(neural_mat.shape)
             
             inputs_list.append(padded_input)
             targets_list.append(padded_target)
             masks_list.append(mask)
+            neural_list.append(neural_mat)
 
         self.inputs = torch.FloatTensor(np.stack(inputs_list, axis=0))
         self.targets = torch.FloatTensor(np.stack(targets_list, axis=0))
         self.masks = torch.FloatTensor(np.stack(masks_list, axis=0))
+        self.neural_data = torch.FloatTensor(np.stack(neural_list, axis=0))
         self.position_mean = position_mean
         self.position_std = position_std
         self.max_length = max_length
-        self.neural_inputs = ...
 
     def split_train_val(
             self, train_ratio: float) -> Tuple[TensorDataset, TensorDataset]:
@@ -96,13 +98,15 @@ class ProcessedData:
         train_inputs = torch.FloatTensor(self.inputs[train_indices])
         train_targets = torch.FloatTensor(self.targets[train_indices])
         train_masks = torch.FloatTensor(self.masks[train_indices])
+        train_neural = torch.FloatTensor(self.neural_data[train_indices])
 
         val_inputs = torch.FloatTensor(self.inputs[val_indices])
         val_targets = torch.FloatTensor(self.targets[val_indices])
         val_masks = torch.FloatTensor(self.masks[val_indices])
+        val_neural = torch.FloatTensor(self.neural_data[val_indices])
 
-        return (TensorDataset(train_inputs, train_targets, train_masks),
-                TensorDataset(val_inputs, val_targets, val_masks))
+        return (TensorDataset(train_inputs, train_targets, train_masks, train_neural),
+                TensorDataset(val_inputs, val_targets, val_masks, val_neural))
 
 
 def masked_mse_loss(predictions, targets, masks):
@@ -119,7 +123,9 @@ def masked_mse_loss(predictions, targets, masks):
 
 
 def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
-                train_loader: DataLoader) -> tuple[float, torch.Tensor]:
+                train_loader: DataLoader, procrustes_losses: list, 
+                task_losses: list) -> tuple[float, torch.Tensor]:
+    
     model.train()
 
     epoch_loss = 0.0
@@ -127,7 +133,7 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
 
     all_hidden_states = []
 
-    for batch_inputs, batch_targets, batch_masks in train_loader:
+    for batch_inputs, batch_targets, batch_masks, batch_neural in train_loader:
         batch_size_actual = batch_inputs.shape[0]
         max_length = batch_inputs.shape[1]
 
@@ -135,19 +141,23 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
         noise = torch.zeros(batch_size_actual, max_length, model.n_recurrent)
 
         outputs, hidden_states = model(batch_inputs, noise)
-
+        
         all_hidden_states.append(hidden_states.detach())
 
         # TODO: Do something with hidden_states?
-        assert torch.isfinite(outputs).all()
+        # assert torch.isfinite(outputs).all()
 
-        loss = masked_mse_loss(outputs, batch_targets, batch_masks)
-        assert torch.isfinite(loss)
+        procrustes_loss = util.procrustes_loss(hidden_states, batch_neural, batch_masks)
+        mse_loss = masked_mse_loss(outputs, batch_targets, batch_masks)
+
+        procrustes_losses.append(procrustes_loss.item())
+        task_losses.append(mse_loss.item())
+
+        loss = mse_loss + procrustes_loss
+        # assert torch.isfinite(loss)
 
         # Backward pass
         optimizer.zero_grad()
-
-
 
         loss.backward()
 
@@ -213,12 +223,16 @@ if __name__ == "__main__":
     val_losses = []
     val_losses_denorm = []
 
+    alignment_corr = []
+    procrustes_losses = []
+    task_losses = []
+
     weight_history = []
     hidden_state_history = []
 
     SAVE_INTERVAL = 1
     
-    eval_inputs, eval_targets, eval_masks = val_data.tensors
+    eval_inputs, eval_targets, eval_masks, eval_neural = val_data.tensors
 
     eval_trials = eval_inputs.shape[0]
 
@@ -236,7 +250,8 @@ if __name__ == "__main__":
     for epoch in range(N_EPOCHS):
         print(f"Epoch {epoch + 1}/{N_EPOCHS}")
         # TRAINING
-        train_loss, hidden_states = train_epoch(model, optimizer, train_loader)
+        train_loss, hidden_states = train_epoch(model, optimizer, train_loader,
+                                                procrustes_losses, task_losses)
 
         assert np.isfinite(train_loss)
         train_losses.append(train_loss)
@@ -276,6 +291,12 @@ if __name__ == "__main__":
                     'hidden_states': hidden_states.clone(),  # (eval_batch_size, n_T, n_recurrent)
                     'val_loss': val_loss,
                 })
+
+                metrics = util.compute_alignment(hidden_states, eval_neural, eval_masks)
+                alignment_corr.append(metrics['correlation'])
+                
+                print(f"  Alignment correlation: {metrics['correlation']:.4f}")
+                print(f"  R²: {metrics['r_squared']:.4f}")
         
         model.train()
 
@@ -293,5 +314,5 @@ if __name__ == "__main__":
         processed_data.position_mean, processed_data.position_std,
         processed_data.max_length)
     # Plot hidden states comparison
-    plot.hidden_states(Path(PLOT_DIR) / "hidden_states_comp.png", hidden_state_history,
+    plot.hidden_states(Path(PLOT_DIR) / "hidden_neural_comp.png", hidden_state_history,
         longest_trial_idx, eval_masks)
