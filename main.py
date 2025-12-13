@@ -13,10 +13,11 @@ N_INPUT = 4  # [cursor_x, cursor_y, target_x, target_y]
 N_RECURRENT = 128  # Hidden units
 N_OUTPUT = 2  # [next_cursor_x, next_cursor_y]
 
-N_EPOCHS = 10
+N_EPOCHS = 20
 LEARNING_RATE = 1e-3
 BATCH_SIZE = 32
 TRAIN_RATIO = 0.8
+LAMBDA = 1e-2
 
 DATA_PATH = "data/indy_20160407_02.mat"
 PLOT_DIR = "plots/"
@@ -68,8 +69,7 @@ class ProcessedData:
         for trial in trials:
             padded_input, padded_target, mask = util.process_trial(
                 trial, position_mean, position_std, max_length)
-            neural_mat, mask = util.process_neural_trial(trial, 1, max_length, max_neurons)
-            # print(neural_mat.shape)
+            neural_mat, neural_mask = util.process_neural_trial(trial, 1, max_length, max_neurons)
             
             inputs_list.append(padded_input)
             targets_list.append(padded_target)
@@ -151,7 +151,7 @@ def train_epoch(model: CTRNN, optimizer: torch.optim.Optimizer,
         procrustes_losses.append(procrustes_loss.item())
         task_losses.append(mse_loss.item())
 
-        loss = mse_loss + procrustes_loss
+        loss = mse_loss + (LAMBDA * procrustes_loss)
         # assert torch.isfinite(loss)
 
         # Backward pass
@@ -180,7 +180,7 @@ def evaluate(model: CTRNN, val_loader: TensorDataset,
     model.eval()
 
     with torch.no_grad():
-        inputs, targets, masks = val_loader.tensors
+        inputs, targets, masks, neural = val_loader.tensors
 
         n_trials = inputs.shape[0]
         max_length = inputs.shape[1]

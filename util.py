@@ -16,6 +16,8 @@ def procrustes_loss(hidden: torch.Tensor, neural: torch.Tensor,
     assert hidden.shape[0] == neural.shape[0] == mask.shape[0]
     B = hidden.shape[0]
 
+    neural = neural.transpose(1, 2)
+
     losses = []
 
     for i in range(B):
@@ -67,6 +69,9 @@ def procrustes_loss(hidden: torch.Tensor, neural: torch.Tensor,
 
 def compute_alignment(hidden: torch.Tensor, neural: torch.Tensor, 
                               mask: torch.Tensor) -> dict:  
+    
+    neural = neural.transpose(1, 2)
+
     with torch.no_grad():
         # first batch only
         h = hidden[0]  # (T, H)
@@ -86,7 +91,9 @@ def compute_alignment(hidden: torch.Tensor, neural: torch.Tensor,
         # Procrustes alignment
         C = h0.T @ y0
         U, S, Vt = torch.linalg.svd(C, full_matrices=False)
-        R = U @ Vt
+        V = Vt.T
+        
+        R = U @ V.T
         
         # Align
         h_aligned = h0 @ R
